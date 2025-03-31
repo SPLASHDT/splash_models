@@ -1,0 +1,978 @@
+# Script for generating the different forecasting models. SPLASH digital twin.
+ 
+# What this scrip does not provide:
+# 1. This script does not provide the extensive hyperparmameter tuning process carried out per T24, T48, T72 models 
+# 2. The script does not regularise such models 
+# 3. The script does not carry out data quality analysis procedures (e.g. multicolinearity, homoscedastic relationships, normality)
+# 4. The script does evaluate other machine leanring performers (e.g. transformers, XGBoost etc)
+# 5. The script does not consider the addressing class imbalances, this was carried out in prior scripts during the tuning process. 
+# 6. The script does not evalaute overfitting and underfitting as this has been considered during the systematic grid searching process. 
+
+# What this scrip does provides:
+# This script outlines the optimised tuning metrics tailored to each forecast model.
+# The script provides the optimal alpha theshold for binary classification which yields the optimal F1 score. 
+# The script saves all the tuned random forests using joblib. 
+
+# Key messages from these models: 
+# The perfromance metrics derive from 5-fold cross validation
+# The seed is always set to 42, this can be changed. 
+# We consider prioritising the precision of these models rather than the recall to minimise false negatives. 
+# We find a 20% testing to 80% training split the optimal for testing performances, although some models work better at 30% testing, these are mostly our regression models 
+# Given the severe class imbalances, we do not limit the tree depth; however, overfitting was examined by comparing the training and testing performances. 
+
+# Input Features: 
+# 1. Hs
+# 2. Tm 
+# 3. shoreWaveDir
+# 4. Wind(m/s)
+# 5. shoreWindDir
+# 6. Freeboard
+
+# Target 
+# 1. Overtopping 
+
+# Input dataset format: Excel 
+# Do the order of input features by column matter: No
+
+
+
+# Required libraries 
+
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+import joblib # for saving our models 
+import numpy as np
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_predict
+from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score, matthews_corrcoef
+from sklearn.model_selection import train_test_split, cross_val_predict
+from sklearn.utils import shuffle
+from sklearn.ensemble import RandomForestRegressor
+
+
+
+
+
+# Random Forest 1: Dawlish
+
+# T 24
+# Step 1: Upload the dataset, this is our wind,wave, wl variables 
+
+file_path_random_forest1_T24_Dawlish = ''
+df_SPLASH_overtopping = pd.read_excel(file_path_random_forest1_T24_Dawlish)
+
+# Step 2: Now define the target and feature variables. 
+X_overtopping_binary = df_SPLASH_overtopping[['Hs', 'Tm', 'shoreWaveDir', 'Wind(m/s)', 'shoreWindDir', 'Freeboard']]
+y_overtopping_features = df_SPLASH_overtopping['Overtopping']
+X_train, X_test, y_train, y_test = train_test_split(X_overtopping_binary, y_overtopping_features, test_size=0.2, random_state=42) # 20% testing we use
+
+
+# Step 3: Insert the optimal hyperparameter tuning metrics. 
+
+rf_model_T24_final = RandomForestClassifier(
+    random_state=42, 
+    n_estimators=100, # custom (grid search)
+    min_samples_leaf=1, # custom (grid search)
+    min_samples_split=2, # custom (grid search)
+    max_depth=None # custom (grid search)
+)
+rf_model_T24_final.fit(X_train, y_train)
+y_prob_testing_dataset = rf_model_T24_final.predict_proba(X_test)[:, 1]
+
+
+# Step 4: Make sure you define the threshold optimal to the model (this case its 0.43)
+optimal_threshold_for_F1 = 0.43 # this was established during the tuning metrics. 
+y_pred_test = (y_prob_testing_dataset >= optimal_threshold_for_F1).astype(int)
+
+# Step 5: Now save the model (T24)
+saving_rf_t24 = 'RF1 T24'
+joblib.dump(rf_model_T24_final, saving_rf_t24)
+
+
+
+
+
+
+
+
+
+
+
+# T 48
+
+# Step 1: Load the dataset 
+
+file_path_random_forest1_T48_Dawlish = '' # instert the file path here
+df_SPLASH_overtopping = pd.read_excel(file_path_random_forest1_T48_Dawlish)
+
+# Step 2: Spearate the features from target 
+X_overtopping_binary = df_SPLASH_overtopping[['Hs', 'Tm', 'shoreWaveDir', 'Wind(m/s)', 'shoreWindDir', 'Freeboard']] # our features 
+y_overtopping_features = df_SPLASH_overtopping['Overtopping'] # target (bianry)
+
+
+# Step 3: Train the random forests using the best custom tuning metrics 
+X_train, X_test, y_train, y_test = train_test_split(X_overtopping_binary, y_overtopping_features, test_size=0.2, random_state=42)
+rf_model_T48_final = RandomForestClassifier( # "classifier" as this is binary 
+    random_state=42, 
+    n_estimators=100,# custom (grid search)
+    min_samples_leaf=1, # custom (grid search)
+    min_samples_split=2, # custom (grid search)
+    max_depth=None # custom (grid search)
+)
+rf_model_T48_final.fit(X_train, y_train)
+
+
+# Step 4: Formualte predictions on the testing dataset using the custom threshold for discerining 1 and 0 classes. 
+y_prob_testing_dataset = rf_model_T48_final.predict_proba(X_test)[:, 1]
+optimal_threshold_for_F1 = 0.35 # custom thrshold here 
+y_pred_test = (y_prob_testing_dataset >= optimal_threshold_for_F1).astype(int)
+
+# Step 5: Now save the model (T48)
+saving_rf_t48 = 'RF1 T48'
+joblib.dump(rf_model_T48_final, saving_rf_t48)
+
+
+
+
+
+
+
+
+
+# T 72
+
+# Step 1: Load the dataset 
+file_path_random_forest1_T72_Dawlish = ''
+df_SPLASH_overtopping = pd.read_excel(file_path_random_forest1_T72_Dawlish)
+
+
+# Step 2: Split to features and target
+X_overtopping_binary = df_SPLASH_overtopping[['Hs', 'Tm', 'shoreWaveDir', 'Wind(m/s)', 'shoreWindDir', 'Freeboard']] # features 
+y_overtopping_features = df_SPLASH_overtopping['Overtopping'] # target 
+
+
+# Step 3: Now train the radom forest using the custom hyperapramter tuning metrics, define the testing to training ratios 
+X_train, X_test, y_train, y_test = train_test_split(X_overtopping_binary, y_overtopping_features, test_size=0.2, random_state=42)
+rf_model_T72_final = RandomForestClassifier(
+    random_state=42,
+    n_estimators=100, # custom (grid search)
+    min_samples_leaf=1, # custom (grid search)
+    min_samples_split=2, # custom (grid search)
+    max_depth=None # custom (grid search)
+)
+rf_model_T72_final.fit(X_train, y_train)
+
+# Step 4: Now use the trained model to predict overtopping in the testing dataset (20%)
+y_prob_testing_dataset = rf_model_T72_final.predict_proba(X_test)[:, 1]
+optimal_threshold_for_F1 = 0.43
+y_pred_test = (y_prob_testing_dataset >= optimal_threshold_for_F1).astype(int)
+
+# Step 5. Save the model (T72)
+saving_rf_t72 = 'RF1 T72'
+joblib.dump(rf_model_T72_final, saving_rf_t72)
+
+
+
+
+
+
+
+
+# Random Forest 2: Dawlish
+
+# T 24
+# Step 1. Upload the dataset 
+file_path_random_forest2_T24_Dawlish = ''
+df_SPLASH_overtopping = pd.read_excel(file_path_random_forest2_T24_Dawlish)
+
+# Step 2. Now split features from target and split the dataset randomly (random state =42) into testing (20%) and training (80%)
+X_overtopping_binary = df_SPLASH_overtopping.drop('Overtopping', axis=1)
+y_overtopping_features = df_SPLASH_overtopping['Overtopping']
+random_seed_generator = 42
+
+# Step 3. Train the random forest using the best tuning parameters 
+X_train, X_test, y_train, y_test = train_test_split(X_overtopping_binary, y_overtopping_features, test_size=0.2, random_state=random_seed_generator)
+best_tuning_paramaters_grid_search = {
+    'max_depth': 10, # custom (grid search)
+    'max_features': 'sqrt', # custom (grid search)
+    'min_samples_leaf': 1, # custom (grid search)
+    'min_samples_split': 2, # custom (grid search)
+    'n_estimators': 100, # custom (grid search)
+    'random_state': random_seed_generator
+}
+rf_model_T24_final = RandomForestRegressor(**best_tuning_paramaters_grid_search) # this is now "regressor" because our target is not binary
+rf_model_T24_final.fit(X_train, y_train)
+
+# Step 4: Get the random forest to predict overtopping count in the testing dataset
+y_prob_testing_dataset = rf_model_T24_final.predict(X_test)
+
+# Step 5: Now save the model
+saving_rf_t24 = 'RF2 T24'
+joblib.dump(rf_model_T24_final, saving_rf_t24)
+
+
+
+
+
+
+
+
+
+# T 48
+# Step 1: Upload the dataset 
+file_path_random_forest2_T48_Dawlish = ''
+df_SPLASH_overtopping = pd.read_excel(file_path_random_forest2_T48_Dawlish)
+
+# Step 2: Separate the features from the target variable 
+X_overtopping_binary = df_SPLASH_overtopping.drop('Overtopping', axis=1)
+y_overtopping_features = df_SPLASH_overtopping['Overtopping']
+random_seed_generator = 42
+X_train, X_test, y_train, y_test = train_test_split(X_overtopping_binary, y_overtopping_features, test_size=0.2, random_state=random_seed_generator)
+
+# Step 3: Train the model using the best hyperparamaters 
+rf_model_T48_final = RandomForestRegressor(
+    max_depth=15, # custom (grid search)
+    max_features='sqrt', # custom (grid search)
+    min_samples_leaf=2, # custom (grid search)
+    min_samples_split=2, # custom (grid search)
+    n_estimators=200, # custom (grid search)
+    random_state=random_seed_generator
+)
+
+rf_model_T48_final.fit(X_train, y_train)
+y_prob_testing_dataset = rf_model_T48_final.predict(X_test)
+
+# Step 4: Now save the model
+saving_rf_t48 = 'RF2 T48'
+joblib.dump(rf_model_T48_final, saving_rf_t48)
+
+
+
+
+
+
+
+
+# T 72
+# Step 1: Uplaod the dataset 
+file_path_random_forest2_T72_Dawlish = ''
+df_SPLASH_overtopping = pd.read_excel(file_path_random_forest2_T72_Dawlish)
+
+# Step 2: Split features from the target variables 
+X_overtopping_binary = df_SPLASH_overtopping.drop('Overtopping', axis=1)
+y_overtopping_features = df_SPLASH_overtopping['Overtopping']
+random_seed_generator = 42
+X_train, X_test, y_train, y_test = train_test_split(X_overtopping_binary, y_overtopping_features, test_size=0.2, random_state=random_seed_generator)
+
+# Step 3: Train the random forest using the best tuning paramaters 
+rf_model_T72_final = RandomForestRegressor(
+    max_depth=20, 
+    max_features='sqrt', 
+    min_samples_leaf=2, 
+    min_samples_split=2, 
+    n_estimators=300, 
+    random_state=random_seed_generator
+)
+
+rf_model_T72_final.fit(X_train, y_train)
+y_prob_testing_dataset = rf_model_T72_final.predict(X_test)
+
+# Step 4: Now save the model
+joblib.dump(rf_model_T72_final, 'RF2 T72')
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Random Forest 3: Dawlish 
+# T24 
+
+# Step 1: Upload the dataset and define the seed, this can be changed but we use the default option (42)
+random_seed_default = 42
+df_SPLASH_overtopping = pd.read_excel('', sheet_name='Sheet1')
+
+# Step 2: Now address class imbalances
+df_0_dropping_no_overtopping = df_SPLASH_overtopping[df_SPLASH_overtopping['Overtopping'] == 0]
+df_1_overtopping = df_SPLASH_overtopping[df_SPLASH_overtopping['Overtopping'] == 1]
+df_0_reduced = df_0_dropping_no_overtopping.sample(n=len(df_1_overtopping), random_state=random_seed_default)
+df_class_imbalanced_rf_model_t24 = pd.concat([df_0_reduced, df_1_overtopping])
+df_balanced_rf_model_t24 = shuffle(df_class_imbalanced_rf_model_t24, random_state=random_seed_default) # important to shuffle to prevent overfitting to a particular fold 
+X_overtopping_binary = df_balanced_rf_model_t24.drop(columns=['Overtopping'])
+y_overtopping_features = df_balanced_rf_model_t24['Overtopping']
+
+# Step 3: Split the dataset into training (70%) and testing (30%)
+X_train, X_test, y_train, y_test = train_test_split(X_overtopping_binary, y_overtopping_features, test_size=0.3, random_state=random_seed_default)
+rf_model_T24_final = RandomForestClassifier(random_state=random_seed_default) # rememebr this is a binary model so we use classifier. 
+rf_model_T24_final.fit(X_train, y_train)
+
+# Step 4: Make the predictions on the testing dataset
+y_prob_testing_dataset = rf_model_T24_final.predict_proba(X_test)[:, 1]
+optimal_threshold_for_F1 = 0.39 # this is the best threshold defined by cross validation 
+y_pred_test_adjusted = (y_prob_testing_dataset >= optimal_threshold_for_F1).astype(int)
+y_prob_cross_validation_score = cross_val_predict(rf_model_T24_final, X_overtopping_binary, y_overtopping_features, cv=5, method='predict_proba')[:, 1]
+y_pred_cross_validation_adjusted_score = (y_prob_cross_validation_score >= optimal_threshold_for_F1).astype(int)
+
+# Step 5: Save the model 
+joblib.dump(rf_model_T24_final, 'RF3 T24')
+
+
+
+
+
+
+
+
+
+# T48
+# Step 1: Upload the dataset and define the seed, this can be changed but we use the default option (42)
+random_seed_default = 42
+df_SPLASH_overtopping = pd.read_excel('', sheet_name='Sheet1')
+
+# Step 2: Now address class imbalances 
+df_0_dropping_no_overtopping = df_SPLASH_overtopping[df_SPLASH_overtopping['Overtopping'] == 0]
+df_1_overtopping = df_SPLASH_overtopping[df_SPLASH_overtopping['Overtopping'] == 1]
+df_0_reduced = df_0_dropping_no_overtopping.sample(n=len(df_1_overtopping), random_state=random_seed_default)
+df_balanced_rf_model_t48 = pd.concat([df_0_reduced, df_1_overtopping])
+df_balanced_rf_model_t48 = shuffle(df_balanced_rf_model_t48, random_state=random_seed_default)
+X_overtopping_binary = df_balanced_rf_model_t48.drop(columns=['Overtopping'])
+y_overtopping_features = df_balanced_rf_model_t48['Overtopping']
+
+# Step 3: Now split the dataset into training and testing 
+X_train, X_test, y_train, y_test = train_test_split(X_overtopping_binary, y_overtopping_features, test_size=0.3, random_state=random_seed_default)
+rf_model_T48_final = RandomForestClassifier(random_state=random_seed_default) # again, this is a classifier model 
+rf_model_T48_final.fit(X_train, y_train)
+
+
+# Step 4: Now use this random forest to predict on the testing dataset 
+y_prob_testing_dataset = rf_model_T48_final.predict_proba(X_test)[:, 1]
+optimal_threshold_for_F1 = 0.39 # this is the best custom threshold 
+y_pred_test_adjusted = (y_prob_testing_dataset >= optimal_threshold_for_F1).astype(int)
+y_prob_cross_validation_score = cross_val_predict(rf_model_T48_final, X_overtopping_binary, y_overtopping_features, cv=5, method='predict_proba')[:, 1]
+y_pred_cross_validation_adjusted_score = (y_prob_cross_validation_score >= optimal_threshold_for_F1).astype(int)
+# remember here we want to use cross validation to ensure we have robust reuslts 
+
+# Step 5: Now save this model 
+joblib.dump(rf_model_T48_final, 'RF3 T48')
+
+
+
+
+
+
+
+
+
+
+# T72
+# Step 1: Upload the dataset 
+random_seed_default = 42
+df_SPLASH_overtopping = pd.read_excel('', sheet_name='Sheet1')
+
+# Step 2: Now address class imbalances 
+df_0_dropping_no_overtopping = df_SPLASH_overtopping[df_SPLASH_overtopping['Overtopping'] == 0]
+df_1_overtopping = df_SPLASH_overtopping[df_SPLASH_overtopping['Overtopping'] == 1]
+df_0_reduced = df_0_dropping_no_overtopping.sample(n=len(df_1_overtopping), random_state=random_seed_default)
+df_balanced_rf_model_t48 = pd.concat([df_0_reduced, df_1_overtopping])
+df_balanced_rf_model_t48 = shuffle(df_balanced_rf_model_t48, random_state=random_seed_default)
+X_overtopping_binary = df_balanced_rf_model_t48.drop(columns=['Overtopping'])
+y_overtopping_features = df_balanced_rf_model_t48['Overtopping']
+
+# Step 3: Now split the dataset into training and testing 
+X_train, X_test, y_train, y_test = train_test_split(X_overtopping_binary, y_overtopping_features, test_size=0.3, random_state=random_seed_default)
+rf_model_T72_final = RandomForestClassifier(random_state=random_seed_default) # this is a classification  model 
+rf_model_T72_final.fit(X_train, y_train)
+
+# Step 4: Make the predictions on the testing dataset using the best threshold (0.39)
+y_prob_testing_dataset = rf_model_T72_final.predict_proba(X_test)[:, 1]
+optimal_threshold_for_F1 = 0.39
+y_pred_test_adjusted = (y_prob_testing_dataset >= optimal_threshold_for_F1).astype(int)
+y_prob_cross_validation_score = cross_val_predict(rf_model_T72_final, X_overtopping_binary, y_overtopping_features, cv=5, method='predict_proba')[:, 1]
+y_pred_cross_validation_adjusted_score = (y_prob_cross_validation_score >= optimal_threshold_for_F1).astype(int)
+
+# Step 5: Save the model
+joblib.dump(rf_model_T72_final, 'RF3 T72')
+
+
+
+
+
+
+
+
+
+# Random Forest 4: Dawlish 
+
+# T24 
+# Step 1: Upload the dataset 
+file_path_random_forest4_T24_Dawlish = ''
+df_SPLASH_overtopping = pd.read_excel(file_path_random_forest4_T24_Dawlish)
+Wirewall_data = df_SPLASH_overtopping.dropna()
+
+
+# Step 2: Now split the dataset from features to target 
+X_overtopping_binary = Wirewall_data.drop('Overtopping', axis=1)
+y_overtopping_features = Wirewall_data['Overtopping']
+y_binary_prediction = (y_overtopping_features > 0).astype(int)
+random_seed_default = 42 # this randomises the split from training and testing 
+
+
+# Step 3: Now train the random forest model 
+X_train, X_test, y_train_binary, y_test_binary = train_test_split(
+    X_overtopping_binary, y_binary_prediction, test_size=0.25, random_state=random_seed_default    
+)
+rf_model_T24_final_classifier = RandomForestClassifier(random_state=random_seed_default)
+rf_model_T24_final_classifier.fit(X_train, y_train_binary)
+y_prob_testing_dataset = rf_model_T24_final_classifier.predict(X_test)
+non_zero_values = np.where(y_prob_testing_dataset == 1)[0]
+features_test_regulaisation_penalty = X_test.iloc[non_zero_values] # the model was overfitting so we apply L2 regularisation penalty 
+overtopping_test_regularisation_penalty = y_overtopping_features.iloc[features_test_regulaisation_penalty.index]
+non_zero_training_reg = y_train_binary[y_train_binary == 1].index
+X_train_reg_penality_fun = X_train.loc[non_zero_training_reg]
+y_train_reg_penality_fun = y_overtopping_features.loc[non_zero_training_reg]
+
+# Step 4: Now train the model using the best tuning metrics 
+rf_model_T24_final = RandomForestRegressor(
+    max_depth=20, # custom, prior tuning 
+    max_features=None, # custom, prior tuning 
+    min_samples_leaf=2, # custom, prior tuning 
+    min_samples_split=2, # custom, prior tuning 
+    n_estimators=300, # custom, prior tuning 
+    random_state=random_seed_default
+)
+rf_model_T24_final.fit(X_train_reg_penality_fun, y_train_reg_penality_fun)
+overtop_pred_reg = rf_model_T24_final.predict(overtopping_test_regularisation_penalty)
+
+# Step 5: Save the models now 
+joblib.dump(rf_model_T24_final_classifier, 'RF4 T24 C')
+joblib.dump(rf_model_T24_final, 'RF4 T24 R')
+
+
+
+
+
+
+
+
+
+# T48
+# Step 1: Upload the dataset 
+file_path_random_forest4_T48_Dawlish = ''
+data_SPLASH = pd.read_excel(file_path_random_forest4_T48_Dawlish)
+data_SPLASH = data_SPLASH.dropna()
+
+
+# Step 2: Now split the dataset into features and targets 
+X_overtopping_binary = data_SPLASH.drop('Overtopping', axis=1)
+y_overtopping_features = data_SPLASH['Overtopping']
+overtop_binary_overtopping = (y_overtopping_features > 0).astype(int)
+random_seed_default = 42
+
+
+# Step 3: Now train the random forests
+X_train, X_test, y_train_binary, y_test_binary = train_test_split(
+    X_overtopping_binary, overtop_binary_overtopping, test_size=0.26, random_state=random_seed_default  # 0.26 this was the best threshold
+)
+rf_model_T48_final_classifier = RandomForestClassifier(random_state=random_seed_default)
+rf_model_T48_final_classifier.fit(X_train, y_train_binary)
+
+
+# Stp 4: Now use the trained model to predict on the testing set 
+y_prob_testing_dataset = rf_model_T48_final_classifier.predict(X_test)
+non_zero_imbalance = np.where(y_prob_testing_dataset == 1)[0]
+feautres_test_reg = X_test.iloc[non_zero_imbalance]
+overtopping_test_reg = y_overtopping_features.iloc[feautres_test_reg.index]
+non_zero_train = y_train_binary[y_train_binary == 1].index
+features_train_reg = X_train.loc[non_zero_train]
+overtopping_train_reg = y_overtopping_features.loc[non_zero_train]
+
+# Step 5: Now train the model using the best tuning parameters 
+rf_model_T48_final = RandomForestRegressor(
+    max_depth=20, # best parameter 
+    max_features=None,  # best parameter
+    min_samples_leaf=2, # best parameter
+    min_samples_split=2, # best parameter
+    n_estimators=300, # best parameter
+    random_state=random_seed_default
+)
+rf_model_T48_final.fit(features_train_reg, overtopping_train_reg)
+overtop_pred_reg = rf_model_T48_final.predict(feautres_test_reg)
+
+# Step 6: Save the models 
+joblib.dump(rf_model_T24_final_classifier, 'RF4 T48 C')
+joblib.dump(rf_model_T48_final, 'RF4 T48 R')
+
+
+
+
+
+
+
+
+
+# T72
+# Step 1: Upload the dataset 
+file_path_random_forest4_T72_Dawlish = ''
+data_SPLASH = pd.read_excel(file_path_random_forest4_T72_Dawlish)
+data_SPLASH = data_SPLASH.dropna()
+
+# Step 2: Now split the dataset to target and features 
+X_overtopping_binary = data_SPLASH.drop('Overtopping', axis=1)
+y_overtopping_features = data_SPLASH['Overtopping']
+y_binary_overtopping = (y_overtopping_features > 0).astype(int)
+random_seed_default = 42
+
+# Step 3: Now train the random forest
+X_train, X_test, y_train_binary, y_test_binary = train_test_split(
+    X_overtopping_binary, y_binary_overtopping, test_size=0.27, random_state=random_seed_default    
+)
+rf_model_T24_final_classifier = RandomForestClassifier(random_state=random_seed_default)
+rf_model_T24_final_classifier.fit(X_train, y_train_binary)
+
+
+# Step 4: Now use this trained model to predict on the testing dataset 
+y_prob_testing_dataset = rf_model_T24_final_classifier.predict(X_test)
+non_zero_vlaues_exclude = np.where(y_prob_testing_dataset == 1)[0]
+features_test_regularisation_penalty = X_test.iloc[non_zero_vlaues_exclude]
+overtopping_test_regularisation_penality = y_overtopping_features.iloc[features_test_regularisation_penalty.index]
+non_zero_training_exclude = y_train_binary[y_train_binary == 1].index
+features_train_regularisation = X_train.loc[non_zero_training_exclude]
+overtopping_train_regularisation = y_overtopping_features.loc[non_zero_training_exclude]
+
+# Step 5: Train the random forest using the best tuning metrics 
+rf_model_T72_final = RandomForestRegressor(
+    max_depth=20,
+    max_features=None,  
+    min_samples_leaf=2,
+    min_samples_split=2,
+    n_estimators=300,
+    random_state=random_seed_default
+)
+rf_model_T72_final.fit(features_train_regularisation, overtopping_train_regularisation)
+overtop_pred_reg_penality = rf_model_T72_final.predict(overtopping_test_regularisation_penality)
+
+# Step 5: Now save the models 
+joblib.dump(rf_model_T24_final_classifier, 'RF4 T72 C')
+joblib.dump(rf_model_T72_final, 'RF4 T72 R')
+
+
+
+
+
+
+#-----------------------------------------------------------------------------------------------------
+
+# Random Forest 1: Penzance
+# T 24
+
+# Step 1: Upload the dataset 
+file_path_random_forest1_T24_Penzance = ''
+data_SPLASH = pd.read_excel(file_path_random_forest1_T24_Penzance, sheet_name='Sheet1')
+
+# Step 2: Split the datatet from features to target 
+X_overtopping_binary = data_SPLASH[['Hs', 'Tm', 'shoreWaveDir', 'Wind(m/s)', 'shoreWindDir', 'Freeboard']]
+y_overtopping_features = data_SPLASH['Overtopping']
+
+# Step 3: Split the dataset into training (80%) and testing (20%) and train using the best tuning metrics 
+X_train, X_test, y_train, y_test = train_test_split(X_overtopping_binary, y_overtopping_features, test_size=0.2, random_state=42)
+rf_model_T24_final = RandomForestClassifier(
+    random_state=42, # best metric 
+    n_estimators=100, # best metric 
+    min_samples_leaf=1, # best metric 
+    min_samples_split=2, # best metric 
+    max_depth=None # best metric 
+)
+rf_model_T24_final.fit(X_train, y_train)
+
+# Step 4: Make the random forest predictions on the testing dataset 
+y_prob_testing_dataset = rf_model_T24_final.predict_proba(X_test)[:, 1]
+optimal_threshold_for_F1 = 0.42
+y_pred_test = (y_prob_testing_dataset >= optimal_threshold_for_F1).astype(int)
+
+# Step 5: Now save the random forest models 
+saved_random_forest_T24 = 'RF1 T24'
+joblib.dump(rf_model_T24_final, saved_random_forest_T24)
+
+
+
+
+
+
+
+
+# T 48
+# Step 1: Now upload the dataset 
+file_path_random_forest1_T48_Penzance = ''
+data_SPLASH = pd.read_excel(file_path_random_forest1_T48_Penzance, sheet_name='Sheet1')
+
+# Step 2: Now split the dataset from features to the target variables 
+X_overtopping_binary = data_SPLASH[['Hs', 'Tm', 'shoreWaveDir', 'Wind(m/s)', 'shoreWindDir', 'Freeboard']]
+y_overtopping_features = data_SPLASH['Overtopping']
+X_train, X_test, y_train, y_test = train_test_split(X_overtopping_binary, y_overtopping_features, test_size=0.2, random_state=42)
+
+# Step 3: Train the random forest using the optimal tuning metrics 
+rf_model_T48_final = RandomForestClassifier(
+    random_state=42,
+    n_estimators=100, # optimised  
+    min_samples_leaf=1, # optimised 
+    min_samples_split=2, # optimised 
+    max_depth=None # optimised 
+)
+rf_model_T48_final.fit(X_train, y_train)
+y_prob_testing_dataset = rf_model_T48_final.predict_proba(X_test)[:, 1]
+optimal_threshold_for_F1 = 0.41
+y_pred_test = (y_prob_testing_dataset >= optimal_threshold_for_F1).astype(int)
+
+# Step 4: Save the model 
+saved_random_forest_T48 = 'RF1 T48'
+joblib.dump(rf_model_T48_final, saved_random_forest_T48)
+
+
+
+
+
+
+
+# T 72
+# Step 1: Now upload the dataset 
+file_path_random_forest1_T72_Penzance = ''
+data_SPLASH = pd.read_excel(file_path_random_forest1_T72_Penzance, sheet_name='Sheet1')
+
+# Step 2: Now split the dataset into features and target variables 
+X_overtopping_binary = data_SPLASH[['Hs', 'Tm', 'shoreWaveDir', 'Wind(m/s)', 'shoreWindDir', 'Freeboard']]
+y_overtopping_features = data_SPLASH['Overtopping']
+X_train, X_test, y_train, y_test = train_test_split(X_overtopping_binary, y_overtopping_features, test_size=0.3, random_state=42)
+
+# Step 3: Train the random forest using the best tuning metrics 
+rf_model_T72_final = RandomForestClassifier(
+    random_state=42, 
+    n_estimators=100, # best metric 
+    min_samples_leaf=1, # best metric 
+    min_samples_split=2, # best metric 
+    max_depth=None # best metric 
+)
+rf_model_T72_final.fit(X_train, y_train)
+
+
+# Step 4: Now get the trained model to predict overtopping (binary) on the testing dataset 
+y_prob_testing_dataset = rf_model_T72_final.predict_proba(X_test)[:, 1]
+optimal_threshold_for_F1 = 0.41 # custom best threshold
+y_pred_test = (y_prob_testing_dataset >= optimal_threshold_for_F1).astype(int)
+
+# Step 5: Now save the model 
+saved_random_forest_T72 = 'RF1 T72'
+joblib.dump(rf_model_T72_final, saved_random_forest_T72)
+
+
+
+
+
+
+
+
+# Random Forest 2: Penzance
+
+# T 24
+# Step 1: Upload the dataset 
+file_path_random_forest2_T24_Penzance = '' 
+data_SPLASH = pd.read_excel(file_path_random_forest2_T24_Penzance)
+
+# Step 2: Separate the features from the target variable
+X_overtopping_count = data_SPLASH.drop('Overtopping', axis=1)
+y_overtopping_features = data_SPLASH['Overtopping']
+random_seed_use = 42
+
+# Step 3: Now define the best tuning parameters 
+best_hyperparameter_tuning_estimates = {
+    'max_depth': 20, # best identified parameter 
+    'max_features': 'sqrt', # best identified parameter 
+    'min_samples_leaf': 1, # best identified parameter 
+    'min_samples_split': 4, # best identified parameter 
+    'n_estimators': 100, # best identified parameter 
+    'random_state': random_seed_use 
+}
+X_train, X_test, y_train, y_test = train_test_split(X_overtopping_count, y_overtopping_features, test_size=0.1, random_state=random_seed_use)
+rf_model_T24_final = RandomForestRegressor(**best_hyperparameter_tuning_estimates) # this is not a classification model
+rf_model_T24_final.fit(X_train, y_train)
+
+# Step 4: Now save the random forest
+saved_random_forest_T24 = 'RF2 T24'
+joblib.dump(rf_model_T24_final, saved_random_forest_T24)
+
+
+
+
+
+
+
+
+# T 48
+# Step 1: Upload the dataset 
+file_path_random_forest2_T48_Penzance = '' 
+data_SPLASH = pd.read_excel(file_path_random_forest2_T48_Penzance)
+
+# Step 2: Split the data from features to target 
+features_overtopping_count = data_SPLASH.drop('Overtopping', axis=1)
+y_overtopping_features = data_SPLASH['Overtopping']
+random_seed_use = 42
+
+# Step 3: Train the random forest using the best tuning parameters 
+best_hyperparameter_tuning_metrics = {
+    'max_depth': 15, # best identified parameter 
+    'max_features': 'sqrt', # best identified parameter 
+    'min_samples_leaf': 1, # best identified parameter 
+    'min_samples_split': 3, # best identified parameter 
+    'n_estimators': 200, # best identified parameter 
+    'random_state': random_seed_use
+}
+X_train, X_test, y_train, y_test = train_test_split(features_overtopping_count, y_overtopping_features, test_size=0.2, random_state=random_seed_use)
+
+# Step 4: Now get the trained random forest to predict overtopping in the testing dataset 
+rf_model_T48_final = RandomForestRegressor(**best_hyperparameter_tuning_metrics)
+rf_model_T48_final.fit(X_train, y_train)
+
+# Step 5: Now save this model 
+saved_random_forest_T48 = 'RF2 T48'
+joblib.dump(rf_model_T48_final, saved_random_forest_T48)
+
+
+
+
+
+
+
+
+# T 72
+# Step 1: Upload the dataset 
+file_path_random_forest2_T72_Penzance = ''
+data_SPLASH = pd.read_excel(file_path_random_forest2_T72_Penzance)
+
+# Step 2: separate the features from the target 
+X_overtopping_binary = data_SPLASH.drop('Overtopping', axis=1)
+y_overtopping_features = data_SPLASH['Overtopping']
+random_seed_use = 42
+
+# Step 3: Now train the random forest using the best tuning parameters 
+X_train, X_test, y_train, y_test = train_test_split(X_overtopping_binary, y_overtopping_features, test_size=0.1, random_state=random_seed_use)
+best_hyperparameter_tuning_metrics = {                                                                              # 10% is the best testing ratio 
+    'max_depth': 15, # best identified parameter
+    'max_features': 'sqrt', # best identified parameter
+    'min_samples_leaf': 1, # best identified parameter
+    'min_samples_split': 2, # best identified parameter
+    'n_estimators': 200, # best identified parameter
+    'random_state': random_seed_use
+}
+
+rf_model_T72_final = RandomForestRegressor(**best_hyperparameter_tuning_metrics)
+rf_model_T72_final.fit(X_train, y_train)
+y_prob_testing_dataset = rf_model_T72_final.predict(X_test)
+saved_random_forest_T72 = 'RF2 T72'
+joblib.dump(rf_model_T72_final, saved_random_forest_T72)
+
+
+
+
+
+
+
+# Random Forest 3: Penzance 
+# T24
+# Step 1: Upload the dataset
+random_seed_use = 42
+data_SPLASH = pd.read_excel('', sheet_name='Sheet1')
+
+# Step 2: Addressing data imbalances for the overtopping class 
+df_0_overtopping_class = data_SPLASH[data_SPLASH['Overtopping'] == 0]
+df_1_overtopping_class = data_SPLASH[data_SPLASH['Overtopping'] == 1]
+df_0_reduced_for_imbalances = df_0_overtopping_class.sample(n=len(df_1_overtopping_class), random_state=random_seed_use)
+df_balanced_overtopping_and_nonovertopping = pd.concat([df_0_reduced_for_imbalances, df_1_overtopping_class])
+df_balanced_overtopping_and_nonovertopping = shuffle(df_balanced_overtopping_and_nonovertopping, random_state=random_seed_use)
+X_overtopping_binary = df_balanced_overtopping_and_nonovertopping.drop(columns=['Overtopping'])
+y_overtopping_features = df_balanced_overtopping_and_nonovertopping['Overtopping']
+
+# Step 3: Now train the random forest 
+X_train, X_test, y_train, y_test = train_test_split(X_overtopping_binary, y_overtopping_features, test_size=0.2, random_state=random_seed_use)
+rf_model_T24_final = RandomForestClassifier(random_state=random_seed_use) # we are dealing with a classifier rememeber 
+rf_model_T24_final.fit(X_train, y_train)
+
+# Step 4: Evaluate the random forest performance on the tesitng dataset 
+y_prob_testing_dataset = rf_model_T24_final.predict_proba(X_test)[:, 1]
+optimal_threshold_for_F1 = 0.35 # customised threshold 
+y_pred_test_adjusted_imbalances = (y_prob_testing_dataset >= optimal_threshold_for_F1).astype(int)
+y_prob_cross_validation_score = cross_val_predict(rf_model_T24_final, X_overtopping_binary, y_overtopping_features, cv=5, method='predict_proba')[:, 1]
+y_pred_cv_adjusted = (y_prob_cross_validation_score >= optimal_threshold_for_F1).astype(int)
+
+# Step 5: Save the random forest 
+joblib.dump(rf_model_T24_final, 'RF3 T24')
+
+
+
+
+
+
+# T48
+# Step 1: Upload the dataset
+random_seed_use = 42
+data_SPLASH = pd.read_excel('', sheet_name='Sheet1')
+
+# Step 2: Address any class imbalances 
+df_0_overtopping_class = data_SPLASH[data_SPLASH['Overtopping'] == 0]
+df_1_overtopping_class = data_SPLASH[data_SPLASH['Overtopping'] == 1]
+df_0_reduced_for_imbalances = df_0_overtopping_class.sample(n=len(df_1_overtopping_class), random_state=random_seed_use)
+df_balanced_overtopping_and_nonovertopping = pd.concat([df_0_reduced, df_1_overtopping_class])
+df_balanced_overtopping_and_nonovertopping = shuffle(df_balanced_overtopping_and_nonovertopping, random_state=random_seed_use)
+X_overtopping_binary = df_balanced_overtopping_and_nonovertopping.drop(columns=['Overtopping'])
+y_overtopping_features = df_balanced_overtopping_and_nonovertopping['Overtopping']
+
+
+# Step 3: Train the random forest 
+X_train, X_test, y_train, y_test = train_test_split(X_overtopping_binary, y_overtopping_features, test_size=0.3, random_state=random_seed_use)
+rf_model_T48_final = RandomForestClassifier(random_state=random_seed_use)
+rf_model_T48_final.fit(X_train, y_train)
+
+# Step 4: Now make the random forest predictions on the testing dataset 
+y_prob_testing_dataset = rf_model_T48_final.predict_proba(X_test)[:, 1]
+optimal_threshold_for_F1 = 0.39 # best threshold 
+y_pred_test_adjusted = (y_prob_testing_dataset >= optimal_threshold_for_F1).astype(int)
+y_prob_crossvalidation_metric = cross_val_predict(rf_model_T48_final, X_overtopping_binary, y_overtopping_features, cv=5, method='predict_proba')[:, 1]
+y_pred_cv_adjusted = (y_prob_crossvalidation_metric >= optimal_threshold_for_F1).astype(int)
+
+# Step 5: Now save the model 
+joblib.dump(rf_model_T48_final, 'RF3 T48')
+
+
+
+
+
+
+
+
+
+# T72
+# Step 1: Upload the dataset
+random_seed_use = 42
+data_SPLASH = pd.read_excel('', sheet_name='Sheet1')
+
+# Step 2: 
+df_0_overtopping_class = data_SPLASH[data_SPLASH['Overtopping'] == 0]
+df_1_overtopping_class = data_SPLASH[data_SPLASH['Overtopping'] == 1]
+df_0_reduced_for_imbalances = df_0_overtopping_class.sample(n=len(df_1_overtopping_class), random_state=random_seed_use)
+df_balanced_overtopping_and_nonovertopping = pd.concat([df_0_reduced_for_imbalances, df_1_overtopping_class])
+df_balanced_overtopping_and_nonovertopping = shuffle(df_balanced_overtopping_and_nonovertopping, random_state=random_seed_use)
+features_overtopping_binary = df_balanced_overtopping_and_nonovertopping.drop(columns=['Overtopping'])
+overtop_overtopping_features = df_balanced_overtopping_and_nonovertopping['Overtopping']
+
+# Step 3: Split the dataset, randomly, into testing (20%) and training (30%)
+X_train, X_test, y_train, y_test = train_test_split(features_overtopping_binary, overtop_overtopping_features, test_size=0.2, random_state=random_seed_use)
+rf_model_T72_final = RandomForestClassifier(random_state=random_seed_use) # classifier not regression
+rf_model_T72_final.fit(X_train, y_train)
+
+# Step 4: Now get the random forest to predict, using the custom threhsold (0.41), in the testing dataset 
+y_prob_testing_dataset = rf_model_T72_final.predict_proba(X_test)[:, 1]
+optimal_threshold_for_F1 = 0.41
+y_pred_test_adjusted = (y_prob_testing_dataset >= optimal_threshold_for_F1).astype(int)
+y_prob_crossvalidation_metric = cross_val_predict(rf_model_T72_final, features_overtopping_binary, overtop_overtopping_features, cv=5, method='predict_proba')[:, 1]
+y_pred_crossvalidation_adjusted = (y_prob_crossvalidation_metric >= optimal_threshold_for_F1).astype(int)
+
+# Step 5: Now save the random forest 
+joblib.dump(rf_model_T72_final, 'RF3 T72')
+
+
+
+
+
+
+
+# Random Forest 4: Penzance
+# T 24
+
+# Step 1: Upload the dataset
+file_path_random_forest4_T24_Penzance = ''  
+data_SPLASH = pd.read_excel(file_path_random_forest4_T24_Penzance)
+
+# Step 2. Now separate the dataset into features and target variables 
+X_overtopping_binary = data_SPLASH.drop('Overtopping', axis=1)
+y_overtopping_features = data_SPLASH['Overtopping']
+random_seed_use = 42
+
+# Step 3: Now train the random forest 
+X_train, X_test, y_train, y_test = train_test_split(X_overtopping_binary, y_overtopping_features, test_size=0.2, random_state=random_seed_use)
+zero_row_remove = data_SPLASH[data_SPLASH['Overtopping'] == 0]
+max_random_forest_interations_T24 = 50
+improved_r2_score = -float('inf')
+for i in range(1, max_random_forest_interations_T24 + 1, 10):
+
+    X_train_iterations_improved = pd.concat([X_train, zero_row_remove.iloc[:i, :-1]], ignore_index=True)
+    y_train_iterations_improved = pd.concat([y_train, zero_row_remove.iloc[:i, -1]], ignore_index=True)
+    rf_model_T24_final = RandomForestRegressor(max_depth=30, max_features=None, min_samples_leaf=1, min_samples_split=2, n_estimators=300, random_state=random_seed_use)
+    rf_model_T24_final.fit(X_train_iterations_improved, y_train_iterations_improved)
+    break
+
+# Step 4: Now save the model 
+joblib.dump(rf_model_T24_final, 'RF4 T24')
+
+
+
+
+
+
+# T 48
+
+# Step 1: Upload the dataset
+file_path_random_forest4_T48_Penzance = ''  
+data_SPLASH = pd.read_excel(file_path_random_forest4_T48_Penzance)
+
+# Step 2: Separate the dataset from features to target 
+X_overtopping_binary = data_SPLASH.drop('Overtopping', axis=1)
+y_overtopping_features = data_SPLASH['Overtopping']
+random_seed_use = 42
+
+# Step 3: Now train the random forest
+X_train, X_test, y_train, y_test = train_test_split(X_overtopping_binary, y_overtopping_features, test_size=0.19, random_state=random_seed_use)
+rf_model_T48_final = RandomForestRegressor(max_depth=20, max_features=None, min_samples_leaf=1, 
+                                 min_samples_split=2, n_estimators=300, random_state=random_seed_use)
+rf_model_T48_final.fit(X_train, y_train)
+y_prob_testing_dataset = rf_model_T48_final.predict(X_test)
+
+# Step 4: Save the random forest
+joblib.dump(rf_model_T48_final, 'RF4 T48')
+
+
+
+
+
+
+
+
+# T 72
+# Step 1: Upload the dataset
+file_path_random_forest4_T72_Penzance = ''  
+data_SPLASH = pd.read_excel(file_path_random_forest4_T72_Penzance)
+
+
+# Step 2: Separate the target and feature variables 
+X_overtopping_binary = data_SPLASH.drop('Overtopping', axis=1)
+y_overtopping_features = data_SPLASH['Overtopping']
+random_seed_use = 42
+
+# Step 3: Train the random forest using the optimal tuning values 
+X_train, X_test, y_train, y_test = train_test_split(X_overtopping_binary, y_overtopping_features, test_size=0.19, random_state=random_seed_use)
+rf_model_T72_final = RandomForestRegressor(max_depth=20, max_features=None, min_samples_leaf=1, 
+                                 min_samples_split=2, n_estimators=300, random_state=random_seed_use)
+rf_model_T72_final.fit(X_train, y_train)
+
+# Step 4: Now get the random forest to predict in the testing dataset
+y_prob_testing_dataset = rf_model_T72_final.predict(X_test)
+
+
+# Step 5: Now save the random forest
+joblib.dump(rf_model_T72_final, 'RF4 T72')
+
+

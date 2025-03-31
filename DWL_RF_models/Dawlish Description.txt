@@ -1,0 +1,48 @@
+Model information document:
+
+
+
+Briefing: 
+
+This information provides information around the training (tailoring) of random forests to specific time sequences of forecast data. This tailoring to forecast data takes into consideration:
+
+1. Train:test splitting ratio (e.g 20:80, 30:70 etc)
+2. Threshold adjustment (0.01-0.99) (binary only) 
+3. Hyperparamater optimisation (e.g. number of decision trees, leaf nodes, decision splits etc)
+4. Regularisation penality (if needed) defined using lambda. 
+
+
+Rig 1: Dawlish 
+
+1. RF1T24 (Binary); "T24" customly trained < 24hrs of forecast data. These models would have greater challenges predicting longerterm (i.e > 24 hours).
+
+2. RF1T48 (Binary); "T48" customly trained between 24-48 hrs of forecast data. These are "mid-range" predictor models trained on forecast data between 24-48 hours. 
+
+3. RF1T72 (Binary); "T72" customly trained to predict overtopping > 48 hours ahead of time. These are "long-range" predictor models. 
+
+4. RF2T24 (Regression)
+
+5. RF2T48 (Regression)
+
+6. RF2T72 (Regression)
+
+
+
+
+Rig 2: Dawlish 
+
+7. RF3T24 (Binary)
+
+8. RF3T48 (Binary)
+
+9. RF3T72 (Binary)
+
+10. RF4T24R (Regression) # the "R" is a silly mistake in the naming, apologies, I am affraid to change the main script in case this has issues with Magda; however, there is nothing significant with the "R"
+
+11. RF4T48R (Regression)
+
+12. RF4T72R (Regression)
+
+
+
+
